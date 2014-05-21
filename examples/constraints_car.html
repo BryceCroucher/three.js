@@ -25,11 +25,38 @@
 		wall_geometry, wall_1, wall_2, wall_3, wall_4,
 		car = {};
 	
+	var readGamePad = function() {
+		if(navigator.webkitGetGamepads) {
+			var gamepads = navigator.webkitGetGamepads();
+			for (var padindex = 0; padindex < gamepads.length; ++padindex) {
+				var pad = gamepads[padindex];
+				var i;
+				if (!pad)
+					continue;
+				if (pad.axes.length >= 1) {
+					var leftStick = -pad.axes[1];
+					if (Math.abs(leftStick)<0.1)
+						leftStick = 0;
+					var rightStick = pad.axes[2];
+					if (Math.abs(rightStick)<0.1)
+						rightStick = 0;
+					var left_speed = 30 * (leftStick + rightStick);
+					var right_speed = 30 * (leftStick - rightStick);					
+					car.wheel_fl_constraint.enableAngularMotor( left_speed, Math.abs(left_speed)*2 );
+					car.wheel_bl_constraint.enableAngularMotor( left_speed, Math.abs(left_speed)*2 );
+					car.wheel_fr_constraint.enableAngularMotor( right_speed, Math.abs(right_speed)*2 );
+					car.wheel_br_constraint.enableAngularMotor( right_speed, Math.abs(right_speed)*2 );
+				}
+			}
+		}
+	}
+
 	render = function() {
 		requestAnimationFrame( render );
 		renderer.render( scene, camera );
 		render_stats.update();
 		controls.update();
+		readGamePad();
 	};
 	
 	initScene = function() {
@@ -64,7 +91,7 @@
 		);
 		
 		camera = new THREE.PerspectiveCamera(
-			35,
+			50,
 			window.innerWidth / window.innerHeight,
 			1,
 			2000
@@ -94,7 +121,7 @@
 		// Materials
 		ground_material = Physijs.createMaterial(
 			new THREE.MeshLambertMaterial({ map: THREE.ImageUtils.loadTexture( 'images/rocks.jpg' ) }),
-			15, // high friction
+			35, // high friction
 			0.4 // low restitution
 		);
 		ground_material.map.wrapS = ground_material.map.wrapT = THREE.RepeatWrapping;
@@ -158,7 +185,7 @@
 		
 		wheel_material = Physijs.createMaterial(
 			new THREE.MeshLambertMaterial({ color: 0x444444 }),
-			15.0, // high friction
+			30.0, // high friction
 			.5 // medium restitution
 		);
 		
@@ -168,8 +195,8 @@
 			.5 // medium restitution
 		);
 		
-		wheel_geometry = new THREE.CylinderGeometry( 2, 2, 1, 15 );
-		var castor_geometry = new THREE.TorusGeometry( 3, .5, 8, 10 );		
+		wheel_geometry = new THREE.CylinderGeometry( 3, 3, 2, 15 );
+		var castor_geometry = new THREE.TorusGeometry( 2, .5, 8, 10 );		
 		
 		car.body = new Physijs.BoxMesh(
 			new THREE.BoxGeometry( 18, 18, 5 ),
@@ -177,7 +204,7 @@
 			50
 		);
 		car.body.rotation.x = Math.PI / 2;
-		car.body.position.y = 8;
+		car.body.position.y = 10;
 		car.body.receiveShadow = car.body.castShadow = true;
 		scene.add( car.body );
 		
@@ -188,7 +215,7 @@
 			.5
 		);
 		car.castor_fl.rotation.x = Math.PI / 2;
-		car.castor_fl.position.set( -12, 6.5, 12 );
+		car.castor_fl.position.set( -8, 11, 12 );
 		car.castor_fl.receiveShadow = car.castor_fl.castShadow = true;
 		scene.add( car.castor_fl );
 		car.castor_fl_constraint = new Physijs.HingeConstraint(
@@ -202,7 +229,7 @@
 			1.000
 		);
 		car.wheel_fl.rotation.x = Math.PI / 2;
-		car.wheel_fl.position.set( -12, 6.5, 12 );
+		car.wheel_fl.position.set( -8, 6.5, 12 );
 		car.wheel_fl.receiveShadow = car.wheel_fl.castShadow = true;
 		scene.add( car.wheel_fl );
 		car.wheel_fl_constraint = new Physijs.HingeConstraint(
@@ -218,7 +245,7 @@
 			.5
 		);
 		car.castor_fr.rotation.x = Math.PI / 2;
-		car.castor_fr.position.set( -12, 6.5, -12 );
+		car.castor_fr.position.set( -8, 11, -12 );
 		car.castor_fr.receiveShadow = car.castor_fr.castShadow = true;
 		scene.add( car.castor_fr );
 		car.castor_fr_constraint = new Physijs.HingeConstraint(
@@ -232,7 +259,7 @@
 			1.000
 		);
 		car.wheel_fr.rotation.x = Math.PI / 2;
-		car.wheel_fr.position.set( -12, 6.5, -12 );
+		car.wheel_fr.position.set( -8, 6.5, -12 );
 		car.wheel_fr.receiveShadow = car.wheel_fr.castShadow = true;
 		scene.add( car.wheel_fr );
 		car.wheel_fr_constraint = new Physijs.HingeConstraint(
@@ -248,7 +275,7 @@
 			1.000
 		);
 		car.wheel_bl.rotation.x = Math.PI / 2;
-		car.wheel_bl.position.set( 12, 6.5, 12 );
+		car.wheel_bl.position.set( 8, 6.5, 12 );
 		car.wheel_bl.receiveShadow = car.wheel_bl.castShadow = true;
 		scene.add( car.wheel_bl );
 		car.wheel_bl_constraint = new Physijs.HingeConstraint(
@@ -264,7 +291,7 @@
 			1.000
 		);
 		car.wheel_br.rotation.x = Math.PI / 2;
-		car.wheel_br.position.set( 12, 6.5, -12 );
+		car.wheel_br.position.set( 8, 6.5, -12 );
 		car.wheel_br.receiveShadow = car.wheel_br.castShadow = true;
 		scene.add( car.wheel_br );
 		car.wheel_br_constraint = new Physijs.HingeConstraint(
@@ -351,7 +378,7 @@
 				}
 			}
 		);
-		
+				
 		requestAnimationFrame( render );
 		scene.simulate();
 	};
