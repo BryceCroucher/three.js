@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+	<title>Constraints, Car - Physijs</title>
+	
+	<link rel="stylesheet" type="text/css" href="css/styles.css" />
+	
+	<script type="text/javascript" src="../build/three.min.js"></script>
+	<script type="text/javascript" src="js/stats.js"></script>
+	<script type="text/javascript" src="../../Physijs/physi.js"></script>
+	<script src="js/controls/OrbitControls.js"></script>
+				
+	<script type="text/javascript">
+	
+	'use strict';
+	
+	Physijs.scripts.worker = 'js/physijs_worker.js';
+	Physijs.scripts.ammo = 'ammo.js';
+	
+	var initScene, render, controls,
+		ground_material, car_material, wheel_material, wheel_geometry,
+		projector, renderer, render_stats, physics_stats, scene, ground_geometry, ground, light, camera,
+		wall_geometry, wall_1, wall_2, wall_3, wall_4, input={}, vehicle;
+	
+	var readGamePad = function() {
+		if(navigator.webkitGetGamepads) {
+			var gamepads = navigator.webkitGetGamepads();
+			for (var padindex = 0; padindex < gamepads.length; ++padindex) {
+				var pad = gamepads[padindex];
+				var i;
+				if (!pad)
+					continue;
+				if (pad.axes.length >= 1) {
+					var leftStick = -pad.axes[1];
+					if (Math.abs(leftStick)<0.1)
+						leftStick = 0;
+					var rightStick = -pad.axes[2];
+					if (Math.abs(rightStick)<0.1)
+						rightStick = 0;
+// tank drive code
+//					var left_speed = 30 * (leftStick + rightStick);
+//					var right_speed = 30 * (leftStick - rightStick);
+					
+					input.direction = rightStick;
+					input.power = leftStick;
+				}
+			}
+		}
+	}
+
+	render = function() {
+		requestAnimationFrame( render );
+		renderer.render( scene, camera );
+		render_stats.update();
+		controls.update();
+		readGamePad();
+		if ( input && vehicle ) {
+			if ( input.direction !== null ) {
+				input.steering += input.direction / 20;
+				//if ( input.steering < -.6 ) input.steering = -.6;
+				//if ( input.steering > .6 ) input.steering = .6;
+			}
+			vehicle.setSteering( input.steering, 0 );
+			vehicle.setSteering( input.steering, 1 );
+			vehicle.setSteering( input.steering, 2 );
+			vehicle.setSteering( input.steering, 3 );
+
+			vehicle.applyEngineForce( input.power * 500 );
+		}
+	};
+	
+	initScene = function() {
+		projector = new THREE.Projector;
+		
+		renderer = new THREE.WebGLRenderer({ antialias: true });
+		renderer.setSize( window.innerWidth, window.innerHeight );
+		renderer.shadowMapEnabled = true;
+		renderer.shadowMapSoft = true;
+		document.getElementById( 'viewport' ).appendChild( renderer.domElement );
+		
+		render_stats = new Stats();
+		render_stats.domElement.style.position = 'absolute';
+		render_stats.domElement.style.top = '0px';
+		render_stats.domElement.style.zIndex = 100;
+		document.getElementById( 'viewport' ).appendChild( render_stats.domElement );
+		
+		physics_stats = new Stats();
+		physics_stats.domElement.style.position = 'absolute';
+		physics_stats.domElement.style.top = '50px';
+		physics_stats.domElement.style.zIndex = 100;
+		document.getElementById( 'viewport' ).appendChild( physics_stats.domElement );
+		
+		scene = new Physijs.Scene;
+		scene.setGravity(new THREE.Vector3( 0, -30, 0 ));
+		scene.addEventListener(
+			'update',
+			function() {
+				scene.simulate( undefined, 2 );
+				physics_stats.update();
+			}
+		);
+		
+		camera = new THREE.PerspectiveCamera(
+			50,
+			window.innerWidth / window.innerHeight,
+			1,
+			2000
+		);
+		camera.position.set( 0, 70, -480 );
+		camera.lookAt( scene.position );
+		scene.add( camera );
+		
+ 		controls = new THREE.OrbitControls( camera );
+		
+		// Light
+		light = new THREE.DirectionalLight( 0xFFFFFF );
+		light.position.set( 20, 40, -15 );
+		light.target.position.copy( scene.position );
+		light.castShadow = true;
+		light.shadowCameraLeft = -60;
+		light.shadowCameraTop = -60;
+		light.shadowCameraRight = 60;
+		light.shadowCameraBottom = 60;
+		light.shadowCameraNear = 20;
+		light.shadowCameraFar = 200;
+		light.shadowBias = -.0001
+		light.shadowMapWidth = light.shadowMapHeight = 2048;
+		light.shadowDarkness = .7;
+		scene.add( light );
+		
+		// Materials
+		ground_material = Physijs.createMaterial(
+			new THREE.MeshLambertMaterial({ map: THREE.ImageUtils.loadTexture( 'images/rocks.jpg' ) }),
+			35, // high friction
+			0.4 // low restitution
+		);
+		ground_material.map.wrapS = ground_material.map.wrapT = THREE.RepeatWrapping;
+		ground_material.map.repeat.set( 3, 3 );
+		
+		// Ground
+		ground = new Physijs.BoxMesh(
+			new THREE.BoxGeometry(312, 1, 624),
+			ground_material,
+			0 // mass
+		);
+		ground.receiveShadow = true;
+		scene.add( ground );
+		
+		// Walls
+		wall_geometry = new THREE.BoxGeometry(1, 24, 624),
+		wall_1 = new Physijs.BoxMesh(
+			wall_geometry,
+			ground_material,
+			0 // mass
+		);
+		wall_1.position.set( -156.0, 5.0, 0.0 );
+		wall_1.receiveShadow = true;
+		scene.add( wall_1 );
+		
+		wall_2 = new Physijs.BoxMesh(
+			wall_geometry,
+			ground_material,
+			0 // mass
+		);
+		wall_2.rotation.y = Math.PI / 2;
+		wall_2.position.set( 0.0, 5.0, -312.0 );
+		wall_2.receiveShadow = true;
+		scene.add( wall_2 );
+
+		wall_3 = new Physijs.BoxMesh(
+			wall_geometry,
+			ground_material,
+			0 // mass
+		);
+		wall_3.position.set( 156.0, 5.0, 0.0 );
+		wall_3.receiveShadow = true;
+		scene.add( wall_3 );
+
+		wall_4 = new Physijs.BoxMesh(
+			wall_geometry,
+			ground_material,
+			0 // mass
+		);
+		wall_4.rotation.y = Math.PI / 2;
+		wall_4.position.set( 0.0, 5.0, 312.0 );
+		wall_4.receiveShadow = true;
+		scene.add( wall_4 );
+	
+		var loader = new THREE.JSONLoader();
+
+		loader.load( "models/mustang.js", function( car, car_materials ) {
+			loader.load( "models/mustang_wheel.js", function( wheel, wheel_materials ) {
+				var mesh = new Physijs.BoxMesh(
+					car,
+					new THREE.MeshFaceMaterial( car_materials )
+				);
+				mesh.position.y = 8;
+				//mesh.scale.x = mesh.scale.y = mesh.scale.z = 4.0;
+				mesh.castShadow = mesh.receiveShadow = true;
+
+				vehicle = new Physijs.Vehicle(mesh, new Physijs.VehicleTuning(
+					100.88, // suspension stiffness 5.88
+					1.83, // compression 0.83
+					28, // damping 0.88
+					100, // travel (cm)
+					10.5, // friction slip 10.5
+					6000 // max suspension force 6000
+				));
+				//vehicle.scale = 4.0;
+				scene.add( vehicle );
+
+				var wheel_material = new THREE.MeshFaceMaterial( wheel_materials );
+				
+				for ( var i = 0; i < 4; i++ ) {
+					vehicle.addWheel(
+						wheel,
+						wheel_material,
+						new THREE.Vector3(
+								i % 2 === 0 ? -1.6 : 1.6,
+								-1,
+								i < 2 ? 3.3 : -3.2
+						),
+						new THREE.Vector3( 0, -1, 0 ),
+						new THREE.Vector3( -1, 0, 0 ),
+						0.5,
+						0.7,
+						i < 2 ? false : true
+					);
+				}
+
+				input = {
+					power: null,
+					direction: null,
+					steering: 0
+				};
+			});
+		});
+		
+		document.addEventListener(
+			'keydown',
+			function( ev ) {
+			    var torque = 40;
+				switch( ev.keyCode ) {
+					case 65:
+						// Left - A
+						break;
+					
+					case 68:
+						// Right - D
+						break;
+					
+					case 87:
+						// Up - W
+						break;
+					
+					case 83:
+						// Down - S
+						break;
+				}
+			}
+		);
+		
+		document.addEventListener(
+			'keyup',
+			function( ev ) {
+				switch( ev.keyCode ) {
+					case 65:
+						// Left
+						break;
+					
+					case 68:
+						// Right
+						break;
+					
+					case 87:
+						// Up
+						break;
+					
+					case 83:
+						// Down
+						break;
+				}
+			}
+		);
+				
+		requestAnimationFrame( render );
+		scene.simulate();
+	};
+
+	
+	window.onload = initScene;
+	
+	</script>
+</head>
+
+<body>
+	<div id="heading">
+		<h1>Constraints - Car</h1>
+		<p>Use the arrow keys to drive around.</p>
+	</div>
+	<div id="viewport"></div>
+</body>
+
+</html>
