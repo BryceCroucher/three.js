@@ -22,7 +22,8 @@
 	var initScene, render, controls,
 		ground_material, car_material, wheel_material, wheel_geometry,
 		projector, renderer, render_stats, physics_stats, scene, ground_geometry, ground, light, camera,
-		wall_geometry, wall_1, wall_2, wall_3, wall_4, input={}, vehicle;
+		wall_geometry, wall_1, wall_2, wall_3, wall_4,
+		car = {};
 	
 	var readGamePad = function() {
 		if(navigator.webkitGetGamepads) {
@@ -36,15 +37,15 @@
 					var leftStick = -pad.axes[1];
 					if (Math.abs(leftStick)<0.1)
 						leftStick = 0;
-					var rightStick = -pad.axes[2];
+					var rightStick = pad.axes[2];
 					if (Math.abs(rightStick)<0.1)
 						rightStick = 0;
-// tank drive code
-//					var left_speed = 30 * (leftStick + rightStick);
-//					var right_speed = 30 * (leftStick - rightStick);
-					
-					input.direction = rightStick;
-					input.power = leftStick;
+					var left_speed = 30 * (leftStick + rightStick);
+					var right_speed = 30 * (leftStick - rightStick);					
+					car.wheel_fl_constraint.enableAngularMotor( left_speed, Math.abs(left_speed)*2 );
+					car.wheel_bl_constraint.enableAngularMotor( left_speed, Math.abs(left_speed)*2 );
+					car.wheel_fr_constraint.enableAngularMotor( right_speed, Math.abs(right_speed)*2 );
+					car.wheel_br_constraint.enableAngularMotor( right_speed, Math.abs(right_speed)*2 );
 				}
 			}
 		}
@@ -56,19 +57,6 @@
 		render_stats.update();
 		controls.update();
 		readGamePad();
-		if ( input && vehicle ) {
-			if ( input.direction !== null ) {
-				input.steering += input.direction / 20;
-				//if ( input.steering < -.6 ) input.steering = -.6;
-				//if ( input.steering > .6 ) input.steering = .6;
-			}
-			vehicle.setSteering( input.steering, 0 );
-			vehicle.setSteering( input.steering, 1 );
-			vehicle.setSteering( input.steering, 2 );
-			vehicle.setSteering( input.steering, 3 );
-
-			vehicle.applyEngineForce( input.power * 500 );
-		}
 	};
 	
 	initScene = function() {
@@ -187,56 +175,130 @@
 		wall_4.position.set( 0.0, 5.0, 312.0 );
 		wall_4.receiveShadow = true;
 		scene.add( wall_4 );
-	
-		var loader = new THREE.JSONLoader();
 
-		loader.load( "models/mustang.js", function( car, car_materials ) {
-			loader.load( "models/mustang_wheel.js", function( wheel, wheel_materials ) {
-				var mesh = new Physijs.BoxMesh(
-					car,
-					new THREE.MeshFaceMaterial( car_materials )
-				);
-				mesh.position.y = 8;
-				//mesh.scale.x = mesh.scale.y = mesh.scale.z = 4.0;
-				mesh.castShadow = mesh.receiveShadow = true;
-
-				vehicle = new Physijs.Vehicle(mesh, new Physijs.VehicleTuning(
-					100.88, // suspension stiffness 5.88
-					1.83, // compression 0.83
-					28, // damping 0.88
-					100, // travel (cm)
-					10.5, // friction slip 10.5
-					6000 // max suspension force 6000
-				));
-				//vehicle.scale = 4.0;
-				scene.add( vehicle );
-
-				var wheel_material = new THREE.MeshFaceMaterial( wheel_materials );
-				
-				for ( var i = 0; i < 4; i++ ) {
-					vehicle.addWheel(
-						wheel,
-						wheel_material,
-						new THREE.Vector3(
-								i % 2 === 0 ? -1.6 : 1.6,
-								-1,
-								i < 2 ? 3.3 : -3.2
-						),
-						new THREE.Vector3( 0, -1, 0 ),
-						new THREE.Vector3( -1, 0, 0 ),
-						0.5,
-						0.7,
-						i < 2 ? false : true
-					);
-				}
-
-				input = {
-					power: null,
-					direction: null,
-					steering: 0
-				};
-			});
-		});
+		// Car
+		car_material = Physijs.createMaterial(
+			new THREE.MeshLambertMaterial({ color: 0xff6666 }),
+			.8, // high friction
+			.2 // low restitution
+		);
+		
+		wheel_material = Physijs.createMaterial(
+			new THREE.MeshLambertMaterial({ color: 0x444444 }),
+			30.0, // high friction
+			.5 // medium restitution
+		);
+		
+		var castor_material = Physijs.createMaterial(
+			new THREE.MeshLambertMaterial({ color: 0x994444 }),
+			3.0, // high friction
+			.5 // medium restitution
+		);
+		
+		wheel_geometry = new THREE.CylinderGeometry( 3, 3, 2, 15 );
+		var castor_geometry = new THREE.TorusGeometry( 2, .5, 8, 10 );		
+		
+		car.body = new Physijs.BoxMesh(
+			new THREE.BoxGeometry( 18, 18, 5 ),
+			car_material,
+			50
+		);
+		car.body.rotation.x = Math.PI / 2;
+		car.body.position.y = 10;
+		car.body.receiveShadow = car.body.castShadow = true;
+		scene.add( car.body );
+		
+		// FRONT LEFT	
+		car.castor_fl = new Physijs.ConcaveMesh(
+			castor_geometry,
+			castor_material,
+			.5
+		);
+		car.castor_fl.rotation.x = Math.PI / 2;
+		car.castor_fl.position.set( -8, 11, 12 );
+		car.castor_fl.receiveShadow = car.castor_fl.castShadow = true;
+		scene.add( car.castor_fl );
+		car.castor_fl_constraint = new Physijs.HingeConstraint(
+			car.castor_fl, car.body, car.castor_fl.position,
+			new THREE.Vector3( 0, 0, 1 )
+		);
+		scene.addConstraint( car.castor_fl_constraint );
+		car.wheel_fl = new Physijs.CylinderMesh(
+			wheel_geometry,
+			wheel_material,
+			1.000
+		);
+		car.wheel_fl.rotation.x = Math.PI / 2;
+		car.wheel_fl.position.set( -8, 6.5, 12 );
+		car.wheel_fl.receiveShadow = car.wheel_fl.castShadow = true;
+		scene.add( car.wheel_fl );
+		car.wheel_fl_constraint = new Physijs.HingeConstraint(
+			car.wheel_fl, car.body, car.wheel_fl.position,
+			new THREE.Vector3( 0, 1, 0 )
+		);
+		scene.addConstraint( car.wheel_fl_constraint );
+		
+		// FRONT RIGHT
+		car.castor_fr = new Physijs.BoxMesh(
+			castor_geometry,
+			castor_material,
+			.5
+		);
+		car.castor_fr.rotation.x = Math.PI / 2;
+		car.castor_fr.position.set( -8, 11, -12 );
+		car.castor_fr.receiveShadow = car.castor_fr.castShadow = true;
+		scene.add( car.castor_fr );
+		car.castor_fr_constraint = new Physijs.HingeConstraint(
+			car.castor_fr, car.body, car.castor_fr.position,
+			new THREE.Vector3( 0, 0, 1 )
+		);
+		scene.addConstraint( car.castor_fr_constraint );
+		car.wheel_fr = new Physijs.CylinderMesh(
+			wheel_geometry,
+			wheel_material,
+			1.000
+		);
+		car.wheel_fr.rotation.x = Math.PI / 2;
+		car.wheel_fr.position.set( -8, 6.5, -12 );
+		car.wheel_fr.receiveShadow = car.wheel_fr.castShadow = true;
+		scene.add( car.wheel_fr );
+		car.wheel_fr_constraint = new Physijs.HingeConstraint(
+			car.wheel_fr, car.body, car.wheel_fr.position,
+			new THREE.Vector3( 0, 1, 0 )
+		);
+		scene.addConstraint( car.wheel_fr_constraint );
+		
+		// BACK LEFT
+		car.wheel_bl = new Physijs.CylinderMesh(
+			wheel_geometry,
+			wheel_material,
+			1.000
+		);
+		car.wheel_bl.rotation.x = Math.PI / 2;
+		car.wheel_bl.position.set( 8, 6.5, 12 );
+		car.wheel_bl.receiveShadow = car.wheel_bl.castShadow = true;
+		scene.add( car.wheel_bl );
+		car.wheel_bl_constraint = new Physijs.HingeConstraint(
+			car.wheel_bl, car.body, car.wheel_bl.position,
+			new THREE.Vector3( 0, 1, 0 )
+		);
+		scene.addConstraint( car.wheel_bl_constraint );
+		
+		// BACK RIGHT
+		car.wheel_br = new Physijs.CylinderMesh(
+			wheel_geometry,
+			wheel_material,
+			1.000
+		);
+		car.wheel_br.rotation.x = Math.PI / 2;
+		car.wheel_br.position.set( 8, 6.5, -12 );
+		car.wheel_br.receiveShadow = car.wheel_br.castShadow = true;
+		scene.add( car.wheel_br );
+		car.wheel_br_constraint = new Physijs.HingeConstraint(
+			car.wheel_br, car.body, car.wheel_br.position,
+			new THREE.Vector3( 0, 1, 0 )
+		);
+		scene.addConstraint( car.wheel_br_constraint );
 		
 		document.addEventListener(
 			'keydown',
@@ -245,18 +307,34 @@
 				switch( ev.keyCode ) {
 					case 65:
 						// Left - A
+						car.wheel_fl_constraint.enableAngularMotor( -100, torque );
+						car.wheel_bl_constraint.enableAngularMotor( -100, torque );
+						car.wheel_fr_constraint.enableAngularMotor( 100, torque );
+						car.wheel_br_constraint.enableAngularMotor( 100, torque );
 						break;
 					
 					case 68:
 						// Right - D
+						car.wheel_fl_constraint.enableAngularMotor( 100, torque );
+						car.wheel_bl_constraint.enableAngularMotor( 100, torque );
+						car.wheel_fr_constraint.enableAngularMotor( -100, torque );
+						car.wheel_br_constraint.enableAngularMotor( -100, torque );
 						break;
 					
 					case 87:
 						// Up - W
+						car.wheel_bl_constraint.enableAngularMotor( 100, torque );
+						car.wheel_br_constraint.enableAngularMotor( 100, torque );
+						car.wheel_fl_constraint.enableAngularMotor( 100, torque );
+						car.wheel_fr_constraint.enableAngularMotor( 100, torque );
 						break;
 					
 					case 83:
 						// Down - S
+						car.wheel_bl_constraint.enableAngularMotor( -100, torque );
+						car.wheel_br_constraint.enableAngularMotor( -100, torque );
+						car.wheel_fl_constraint.enableAngularMotor( -100, torque );
+						car.wheel_fr_constraint.enableAngularMotor( -100, torque );
 						break;
 				}
 			}
@@ -268,18 +346,34 @@
 				switch( ev.keyCode ) {
 					case 65:
 						// Left
+						car.wheel_fl_constraint.disableMotor();
+						car.wheel_fr_constraint.disableMotor();
+						car.wheel_bl_constraint.disableMotor();
+						car.wheel_br_constraint.disableMotor();
 						break;
 					
 					case 68:
 						// Right
+						car.wheel_fl_constraint.disableMotor();
+						car.wheel_fr_constraint.disableMotor();
+						car.wheel_bl_constraint.disableMotor();
+						car.wheel_br_constraint.disableMotor();
 						break;
 					
 					case 87:
 						// Up
+						car.wheel_fl_constraint.disableMotor();
+						car.wheel_fr_constraint.disableMotor();
+						car.wheel_bl_constraint.disableMotor();
+						car.wheel_br_constraint.disableMotor();
 						break;
 					
 					case 83:
 						// Down
+						car.wheel_fl_constraint.disableMotor();
+						car.wheel_fr_constraint.disableMotor();
+						car.wheel_bl_constraint.disableMotor();
+						car.wheel_br_constraint.disableMotor();
 						break;
 				}
 			}
